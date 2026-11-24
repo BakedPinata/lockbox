@@ -49,7 +49,7 @@ Lockbox/              class library, target net10.0-windows
   DpapiUserProtector.cs       ProtectedData + CurrentUser + entropy
   SecretStore.cs              load/save named secrets to a JSON file
   SecretStoreException.cs     clear, actionable error messages
-Lockbox.Tests/
+Lockbox.Tests/            MSTest; DPAPI tests are Windows-only
 Lockbox.Setup.WinForms/   GUI for entering secrets
 samples/                  demonstration apps and mock server (milestone 4)
 ```
@@ -75,6 +75,7 @@ Default path is `%APPDATA%\<AppName>\secrets.json`. It can be overridden with co
 
 - `encryptedBy` is **diagnostic metadata only**, never used for security. When decryption fails, use it to explain why: *"This file was encrypted by DOMAIN\x on PC123; you are running as DOMAIN\y on SRV01. Re-run set-credentials as the account that will run the app."*
 - **Entropy:** pass `optionalEntropy` = UTF-8 of `"<AppName>|<secretName>"`. This isn't a secret. It only stops other apps running as the same user from casually decrypting these blobs, and it binds each blob to its name, so swapped entries fail to decrypt. `SecretStore` passes this string to the protector as its `context`, so a future `CertificateProtector` must also bind to it.
+- **Versioning:** readers ignore unknown properties but don't keep them when they save, so adding any field to the format means bumping `version`. A reader refuses (and never overwrites) a file with a newer version.
 - **One account per file:** `SetSecrets` refuses to add secrets to a file whose existing secrets were encrypted by another account (by SID, falling back to account name), because the file would end up partly unreadable. The fix is a different `--secrets-path`, or `Delete()` and then set everything again. Removing a secret leaves `encryptedBy` unchanged.
 
 ### Setup commands (in each app, or in a shared CLI)
@@ -121,7 +122,7 @@ The WinForms setup utility is just a GUI over the same `SecretStore`. It has the
 Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in each consuming app's own solution, using the demonstration apps as the reference.
 
 1. [x] `Lockbox` library (`net10.0-windows`): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(Built and smoke-tested on Linux with a fake protector. The real DPAPI path still needs a run on Windows, covered by milestone 2.)*
-2. [ ] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere).
+2. [x] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere). *(MSTest; DPAPI tests use `[OSCondition(Windows)]` and run in CI on `windows-latest`. Store logic is tested on every platform with a fake account-bound protector.)*
 3. [ ] `set-credentials` / `verify-credentials` / `show-credentials-info` with masked input.
 4. [ ] Demonstration apps, self-contained publish, runnable without the real services:
    - **Jira-style sample:** loads `jira.pat`, sends `Authorization: Bearer <pat>`.

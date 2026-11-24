@@ -35,7 +35,7 @@ internal sealed class SecretFile
         }
         catch (JsonException ex)
         {
-            throw Corrupt(filePath, $"it isn't valid JSON at {ex.Path ?? "$"}", ex);
+            throw Corrupt(filePath, $"it couldn't be parsed at {ex.Path ?? "$"}", ex);
         }
 
         if (versionModel?.Version is not int version || version < 1)

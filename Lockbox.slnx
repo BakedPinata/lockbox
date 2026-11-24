@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="Lockbox.Tests/Lockbox.Tests.csproj" />
   <Project Path="Lockbox/Lockbox.csproj" />
 </Solution>

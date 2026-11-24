@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # DPAPI tests only run on Windows; they are skipped on Linux.
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
