@@ -44,7 +44,7 @@ Use `System.Security.Cryptography.ProtectedData` (NuGet) with `DataProtectionSco
 ### Projects
 
 ```
-Lockbox/              class library, target net10.0-windows
+Lockbox/              class library, targets net9.0-windows and net10.0-windows
   ISecretProtector.cs         byte[] Protect(byte[], string context) / byte[] Unprotect(byte[], string context)
   DpapiUserProtector.cs       ProtectedData + CurrentUser + entropy
   SecretStore.cs              load/save named secrets to a JSON file; Inspect(names), ReplaceSecrets(values)
@@ -155,7 +155,7 @@ A GUI over the same `SecretStore`, with the same rule: it must run as the accoun
 
 Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in each consuming app's own solution, using the demonstration apps as the reference.
 
-1. [x] `Lockbox` library (`net10.0-windows`): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(DPAPI verified on Windows in CI.)*
+1. [x] `Lockbox` library (`net10.0-windows`, and `net9.0-windows` since 0.3.0): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(DPAPI verified on Windows in CI.)*
 2. [x] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere). *(MSTest; DPAPI tests use `[OSCondition(Windows)]` and run in CI on `windows-latest` (99 passed there; the only skip is the non-Windows check). Store logic is tested on every platform with a fake account-bound protector.)*
 3. [x] `set-credentials` / `verify-credentials` / `show-credentials-info` with masked input. *(`Lockbox.Cli`; masked input also checked by hand in a real terminal.)*
 4. [x] Demonstration apps, self-contained publish, runnable without the real services:
@@ -174,6 +174,7 @@ Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in e
 ## Decisions
 
 - **Framework:** .NET 10. Published apps are self-contained and don't depend on an installed runtime.
+- **.NET 9 consumers:** `Lockbox` and `Lockbox.Cli` (and `Lockbox.Setup`) also target `net9.0-windows`, because some consuming apps can't move to .NET 10 yet. This is done by multi-targeting on `main`, not a parallel branch, so every fix lands once. The code is the same for both (no `#if`), so use only APIs and C# features that .NET 9 / C# 13 have. `Lockbox.Tests` runs on both runtimes in CI. The samples, `LockboxSetup.exe` and their tests stay on .NET 10; that doesn't matter to consumers, because they're self-contained and talk to apps only through the command line.
 - **Consumers:** apps live in separate solutions, and more will be added later, so `Lockbox` stays generic and app-agnostic. This repo holds the library and demonstration apps that show how a consuming app decrypts its credentials.
 - **Jira:** Server/Data Center with a Bearer PAT.
 - **API auth:** JWT from username + password. No refresh endpoint; re-login is required.

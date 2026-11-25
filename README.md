@@ -147,7 +147,8 @@ Then add that folder as a package source, in a `nuget.config` next to the app's 
 </configuration>
 ```
 
-Then run `dotnet add package Lockbox.Cli`, which brings in `Lockbox` too. The app must target `net10.0-windows`.
+Then run `dotnet add package Lockbox.Cli`, which brings in `Lockbox` too. The app must target `net9.0-windows` or
+`net10.0-windows`: the packages contain a build for each.
 
 ### 2. Wire up the commands and read the secrets
 
@@ -214,7 +215,8 @@ dotnet publish -p:PublishProfile=win-x64
 
 ## Building and testing
 
-Needs the .NET 10 SDK. Everything builds on any OS; DPAPI, the samples and the setup tool *run* only on Windows.
+Needs the .NET 10 SDK, plus the .NET 9 runtime to run the libraries' tests on .NET 9. Everything builds on any OS;
+DPAPI, the samples and the setup tool *run* only on Windows.
 
 ```bash
 dotnet build
@@ -224,11 +226,11 @@ pwsh samples/e2e.ps1        # Windows: publish the samples and run them end to e
 
 | Project | |
 |---|---|
-| `Lockbox` | The library: `SecretStore`, `ISecretProtector`, `DpapiUserProtector`. |
-| `Lockbox.Cli` | The credential commands for console apps. |
+| `Lockbox` | The library: `SecretStore`, `ISecretProtector`, `DpapiUserProtector`. Targets .NET 9 and .NET 10. |
+| `Lockbox.Cli` | The credential commands for console apps. Targets .NET 9 and .NET 10. |
 | `Lockbox.Setup` | The setup tool's logic, with no UI code. |
 | `Lockbox.Setup.WinForms` | `LockboxSetup.exe`. |
-| `Lockbox.Tests`, `Lockbox.Setup.WinForms.Tests` | Unit tests. The WinForms tests run on Windows only. |
+| `Lockbox.Tests`, `Lockbox.Setup.WinForms.Tests` | Unit tests. `Lockbox.Tests` runs on .NET 9 and .NET 10; the WinForms tests run on Windows only. |
 | `samples/` | Demonstration apps, mock server, sample tests, `e2e.ps1`. |
 
 CI (GitHub Actions) builds and tests on Windows and Linux, and runs `samples/e2e.ps1` on Windows.

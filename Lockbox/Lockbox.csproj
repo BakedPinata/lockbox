@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- .NET 9 as well, so apps that can't move to .NET 10 yet can use the packages. -->
+    <TargetFrameworks>net9.0-windows;net10.0-windows</TargetFrameworks>
     <RootNamespace>Lockbox</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsTrimmable>true</IsTrimmable>
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>Lockbox</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Description>Stores named secrets in a JSON file, encrypted with Windows DPAPI (CurrentUser scope).</Description>
   </PropertyGroup>
 
