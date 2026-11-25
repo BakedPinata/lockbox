@@ -33,3 +33,8 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
+
+      - name: End-to-end (samples, real DPAPI)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./samples/e2e.ps1

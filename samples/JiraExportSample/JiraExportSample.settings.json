@@ -1,0 +1,8 @@
+{
+  // Non-secret settings. Credentials are stored with: JiraExportSample set-credentials
+  "BaseUrl": "http://localhost:5080/",
+
+  // Optional: a secrets file other than %APPDATA%\JiraExportSample\secrets.json.
+  // Environment variables are expanded, e.g. "%USERPROFILE%\\secrets\\jira.json".
+  "SecretsPath": null
+}

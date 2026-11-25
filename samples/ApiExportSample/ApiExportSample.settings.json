@@ -1,0 +1,8 @@
+{
+  // Non-secret settings. Credentials are stored with: ApiExportSample set-credentials
+  "BaseUrl": "http://localhost:5080/",
+
+  // Optional: a secrets file other than %APPDATA%\ApiExportSample\secrets.json.
+  // Environment variables are expanded, e.g. "%USERPROFILE%\\secrets\\api.json".
+  "SecretsPath": null
+}

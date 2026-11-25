@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/ApiExportSample/ApiExportSample.csproj" />
+    <Project Path="samples/JiraExportSample/JiraExportSample.csproj" />
+    <Project Path="samples/MockServer/MockServer.csproj" />
+    <Project Path="samples/Samples.Tests/Samples.Tests.csproj" />
+    <Project Path="samples/SampleSupport/SampleSupport.csproj" />
+  </Folder>
   <Project Path="Lockbox.Cli/Lockbox.Cli.csproj" />
   <Project Path="Lockbox.Tests/Lockbox.Tests.csproj" />
   <Project Path="Lockbox/Lockbox.csproj" />

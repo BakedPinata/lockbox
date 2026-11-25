@@ -55,7 +55,13 @@ Lockbox.Cli/              set-credentials / verify-credentials / show-credential
   CredentialCheck.cs          optional app hook that tests the credentials against the service
 Lockbox.Tests/            MSTest; DPAPI tests are Windows-only
 Lockbox.Setup.WinForms/   GUI for entering secrets
-samples/                  demonstration apps and mock server (milestone 4)
+samples/                  demonstration apps (milestone 4); see samples/README.md
+  JiraExportSample/         PAT as a default Bearer header
+  ApiExportSample/          username + password -> JWT; Auth/ has LoginClient, TokenProvider, BearerTokenHandler
+  MockServer/               fake Jira + API endpoints, short-lived JWTs, optional key rotation (any OS)
+  SampleSupport/            settings file, HTTPS-only URLs, export options, logging
+  Samples.Tests/            sample HTTP code against the mock (any OS)
+  e2e.ps1                   full flow on Windows with real DPAPI (run in CI)
 ```
 
 Keep `ISecretProtector` so a `CertificateProtector` can be added later without touching the apps.
@@ -101,16 +107,18 @@ The WinForms setup utility is just a GUI over the same `SecretStore`. It has the
 
 ### App integration
 
-**API export app**
+**API export app** (see `samples/ApiExportSample`)
 - At startup, load `api.username` / `api.password`, then request a JWT.
 - Keep the JWT **in memory only**. Never write it to disk.
+- Renew when less than a fifth of the token's lifetime (at most 60 s) is left. The expiry comes from the JWT's `exp` claim, read without validation and used only for scheduling, falling back to the login response's `expiresIn`. Concurrent requests share one login.
 - Add the header with a `DelegatingHandler`. There is no refresh endpoint, so if the token expires during a long export, log in again proactively (check `exp`), or on a 401 re-authenticate once and retry once.
 
-**Jira export app**
+**Jira export app** (see `samples/JiraExportSample`)
 - Load `jira.pat`. For Jira Server/Data Center, send `Authorization: Bearer <PAT>`. (Jira Cloud uses email + API token with Basic auth instead; the samples target Server/Data Center.)
 
 ### Security hygiene
 
+- Only send credentials over `https://`; the samples allow `http://` for loopback only.
 - Never log secrets, the JWT or the `Authorization` header. Check that the HttpClient / `IHttpClientFactory` logging config redacts header values, and keep secrets out of exception messages.
 - Don't try to zero managed strings. It isn't reliable in .NET, and the threat model doesn't need it.
 - Restrict the folder holding the secrets file to the owning account. On the file server, that's the user plus admins.
@@ -135,11 +143,12 @@ Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in e
 1. [x] `Lockbox` library (`net10.0-windows`): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(DPAPI verified on Windows in CI.)*
 2. [x] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere). *(MSTest; DPAPI tests use `[OSCondition(Windows)]` and run in CI on `windows-latest` (99 passed there; the only skip is the non-Windows check). Store logic is tested on every platform with a fake account-bound protector.)*
 3. [x] `set-credentials` / `verify-credentials` / `show-credentials-info` with masked input. *(`Lockbox.Cli`; masked input also checked by hand in a real terminal.)*
-4. [ ] Demonstration apps, self-contained publish, runnable without the real services:
+4. [x] Demonstration apps, self-contained publish, runnable without the real services:
    - **Jira-style sample:** loads `jira.pat`, sends `Authorization: Bearer <pat>`.
    - **API-style sample:** loads `api.username` / `api.password`, logs in for a JWT, keeps it in memory only, adds it with a `DelegatingHandler`, re-logs in before `exp` and on a 401 (once, then retries once).
    - Both expose the setup commands from milestone 3 and redact `Authorization` in logs.
    - A small local mock server (login + protected endpoint, short-lived JWTs) so the samples can be run end to end, including token expiry.
+   - *(Tested by `Samples.Tests` on every OS. `samples/e2e.ps1` runs the full flow on Windows in CI: self-contained publish, real DPAPI, credentials piped to `set-credentials`, both exports, early renewal and the 401 retry.)*
 5. [ ] *(consumer)* Integrate into a Jira app, following the Jira-style sample.
 6. [ ] *(consumer)* Integrate into an API app, following the API-style sample.
 7. [ ] *(consumer)* Remove any existing plain-text credential config from the consuming apps. Make sure secrets aren't committed in git history.
