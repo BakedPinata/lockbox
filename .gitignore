@@ -193,8 +193,9 @@ publish/
 # Note: Comment the next line if you want to checkin your web deploy settings,
 # but database connection strings (with potential passwords) will be unencrypted
 *.pubxml
-# The samples' win-x64 profiles hold only build settings (no deployment credentials).
+# These win-x64 profiles hold only build settings (no deployment credentials).
 !samples/*/Properties/PublishProfiles/win-x64.pubxml
+!Lockbox.Setup.WinForms/Properties/PublishProfiles/win-x64.pubxml
 *.publishproj
 
 # Microsoft Azure Web App publish settings. Comment the next line if you want to

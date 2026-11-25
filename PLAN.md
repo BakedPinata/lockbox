@@ -47,14 +47,20 @@ Use `System.Security.Cryptography.ProtectedData` (NuGet) with `DataProtectionSco
 Lockbox/              class library, target net10.0-windows
   ISecretProtector.cs         byte[] Protect(byte[], string context) / byte[] Unprotect(byte[], string context)
   DpapiUserProtector.cs       ProtectedData + CurrentUser + entropy
-  SecretStore.cs              load/save named secrets to a JSON file
+  SecretStore.cs              load/save named secrets to a JSON file; Inspect(names), ReplaceSecrets(values)
   SecretStoreException.cs     clear, actionable error messages
 Lockbox.Cli/              set-credentials / verify-credentials / show-credentials-info for console apps
   CredentialCommands.cs       TryRunAsync(args), CreateStore(args), WriteUsage
   CredentialDefinition.cs     name + prompt + masked
   CredentialCheck.cs          optional app hook that tests the credentials against the service
+  (describe-credentials)      prints the app's name, secrets path and credential definitions as JSON
+Lockbox.Setup/            the setup tool's logic, no UI code (tested on any OS)
+  TargetApp.cs                runs the app's describe-credentials / verify-credentials
+  SetupSession.cs             the same save / keep / replace rules as set-credentials
+  RunAsCommand.cs             builds a runas command for another account
+Lockbox.Setup.WinForms/   LockboxSetup.exe: GUI for entering any Lockbox app's secrets
 Lockbox.Tests/            MSTest; DPAPI tests are Windows-only
-Lockbox.Setup.WinForms/   GUI for entering secrets
+Lockbox.Setup.WinForms.Tests/  drives the real form with real DPAPI (Windows-only)
 samples/                  demonstration apps (milestone 4); see samples/README.md
   JiraExportSample/         PAT as a default Bearer header
   ApiExportSample/          username + password -> JWT; Auth/ has LoginClient, TokenProvider, BearerTokenHandler
@@ -86,7 +92,7 @@ Default path is `%APPDATA%\<AppName>\secrets.json`. It can be overridden with co
 - `encryptedBy` is **diagnostic metadata only**, never used for security. When decryption fails, use it to explain why: *"This file was encrypted by DOMAIN\x on PC123; you are running as DOMAIN\y on SRV01. Re-run set-credentials as the account that will run the app."*
 - **Entropy:** pass `optionalEntropy` = UTF-8 of `"<AppName>|<secretName>"`. This isn't a secret. It only stops other apps running as the same user from casually decrypting these blobs, and it binds each blob to its name, so swapped entries fail to decrypt. `SecretStore` passes this string to the protector as its `context`, so a future `CertificateProtector` must also bind to it.
 - **Versioning:** readers ignore unknown properties but don't keep them when they save, so adding any field to the format means bumping `version`. A reader refuses (and never overwrites) a file with a newer version.
-- **One account per file:** `SetSecrets` refuses to add secrets to a file whose existing secrets were encrypted by another account (by SID, falling back to account name), because the file would end up partly unreadable. The fix is a different `--secrets-path`, or `Delete()` and then set everything again. Removing a secret leaves `encryptedBy` unchanged.
+- **One account per file:** `SetSecrets` refuses to add secrets to a file whose existing secrets were encrypted by another account (by SID, falling back to account name), because the file would end up partly unreadable. The fix is a different `--secrets-path`, or `ReplaceSecrets`, which writes a new file in one atomic step, once the user has agreed. `Inspect` reports which case applies without throwing. Removing a secret leaves `encryptedBy` unchanged.
 
 ### Setup commands (in each app, via `Lockbox.Cli`)
 
@@ -98,12 +104,21 @@ Behaviour (implemented in `Lockbox.Cli`):
 
 - An app adds them with `if (await commands.TryRunAsync(args) is int exitCode) return exitCode;`. Only `--secrets-path <path>` (or `=path`) is accepted. Any other argument is rejected **without being echoed**, since it may be a secret. Exit codes: 0 success, 1 failure or cancelled, 2 usage.
 - `verify-credentials` decrypts every value, then runs the app's `CredentialCheck` hook if it has one (for example a token request) with all of them. Exceptions from the hook are reported, not thrown.
+- Whitespace-only input counts as blank. Visible values are trimmed; masked values are otherwise kept exactly as typed.
 - `set-credentials` offers "Enter to keep the current value" only for values that currently decrypt. If the file belongs to another account or protector, or is corrupt, it asks before replacing it, and only replaces it once every value has been entered. Escape or end of input cancels without saving. It runs the verify step at the end.
 - Masked input echoes `*`, supports Backspace, and ignores control keys. When stdin is redirected (provisioning scripts), values are read as plain lines, with nothing echoed.
 
 On the server, run these **as the job's Windows account on the server**, either by logging in as it or with `runas /user:SERVER\jobaccount "app.exe set-credentials"`.
 
-The WinForms setup utility is just a GUI over the same `SecretStore`. It has the same rule: it must run as the account that will later run the app.
+### Setup tool (`LockboxSetup.exe`)
+
+A GUI over the same `SecretStore`, with the same rule: it must run as the account that will later run the app. It's a required part of Lockbox, not an optional extra.
+
+- **Generic:** it works with any app built with `Lockbox.Cli` 0.2+, without knowing the app in advance. It runs `<app> describe-credentials [--secrets-path]` to learn the app name, secrets path and fields, saves through `SecretStore` itself, and runs `<app> verify-credentials` to check the result (including the app's service check). The credential definitions therefore live in one place: the app's code.
+- **Fields:** one per credential, masked as the app says, with the current state (set and when, not set, or can't be decrypted). Blank keeps a usable value. Replacing another account's, another protector's or a corrupt file needs confirmation. It refuses to overwrite a newer-format file.
+- **Run as another account:** builds the `runas` command for a given account, with a Copy button.
+- **Launch:** `LockboxSetup.exe [--app <exe or dll>] [--secrets-path <path>]`. Without `--app` it asks for the app. Unknown arguments show usage, without echoing them.
+- **Publish:** a self-contained single file (`win-x64` profile, compressed, about 50 MB).
 
 ### App integration
 
@@ -153,8 +168,8 @@ Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in e
 6. [ ] *(consumer)* Integrate into an API app, following the API-style sample.
 7. [ ] *(consumer)* Remove any existing plain-text credential config from the consuming apps. Make sure secrets aren't committed in git history.
 8. [ ] Server dry run: create the job account, run `set-credentials` as that account, run a scheduled trigger, confirm decryption and the export. Do it with a demonstration app first, then the consuming apps.
-9. [ ] (Optional) WinForms setup utility.
-10. [ ] README for end users and integrators: first-time setup, re-running after a password change, troubleshooting decryption errors, and how to add `Lockbox` to a new app.
+9. [x] WinForms setup utility (`LockboxSetup.exe`). *(Not optional: the original plan was wrong. Logic tested on any OS; the form itself is tested on Windows in CI.)*
+10. [x] README for end users and integrators: first-time setup, re-running after a password change, troubleshooting decryption errors, and how to add `Lockbox` to a new app.
 
 ## Decisions
 

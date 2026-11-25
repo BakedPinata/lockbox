@@ -8,7 +8,7 @@
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>Lockbox</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Stores named secrets in a JSON file, encrypted with Windows DPAPI (CurrentUser scope).</Description>
   </PropertyGroup>
 

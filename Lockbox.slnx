@@ -7,6 +7,9 @@
     <Project Path="samples/SampleSupport/SampleSupport.csproj" />
   </Folder>
   <Project Path="Lockbox.Cli/Lockbox.Cli.csproj" />
+  <Project Path="Lockbox.Setup.WinForms.Tests/Lockbox.Setup.WinForms.Tests.csproj" />
+  <Project Path="Lockbox.Setup.WinForms/Lockbox.Setup.WinForms.csproj" />
+  <Project Path="Lockbox.Setup/Lockbox.Setup.csproj" />
   <Project Path="Lockbox.Tests/Lockbox.Tests.csproj" />
   <Project Path="Lockbox/Lockbox.csproj" />
 </Solution>

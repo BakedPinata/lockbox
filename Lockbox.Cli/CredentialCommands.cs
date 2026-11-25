@@ -1,4 +1,7 @@
+using System.Buffers;
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 
 namespace Lockbox.Cli;
 
@@ -31,6 +34,15 @@ public sealed class CredentialCommands
 
     /// <summary>Shows the file path, who encrypted it, and secret names and dates, without decrypting.</summary>
     public const string InfoCommand = "show-credentials-info";
+
+    /// <summary>
+    /// Prints the app's name, secrets file path and credential definitions as JSON, so a setup tool such as
+    /// Lockbox.Setup can save the app's credentials without knowing about the app in advance. No values are printed.
+    /// </summary>
+    public const string DescribeCommand = "describe-credentials";
+
+    /// <summary>The <c>"format"</c> value of <see cref="DescribeCommand"/>'s output.</summary>
+    public const string DescribeFormat = "lockbox-credentials/1";
 
     /// <summary>The option that overrides the secrets file path, as <c>--secrets-path &lt;path&gt;</c> or <c>--secrets-path=&lt;path&gt;</c>.</summary>
     public const string SecretsPathOption = "--secrets-path";
@@ -110,7 +122,7 @@ public sealed class CredentialCommands
 
     /// <summary>Whether <paramref name="command"/> is one of the credential commands.</summary>
     public static bool IsCredentialCommand(string? command) =>
-        command is SetCommand or VerifyCommand or InfoCommand;
+        command is SetCommand or VerifyCommand or InfoCommand or DescribeCommand;
 
     /// <summary>
     /// Finds the value of <c>--secrets-path</c> in <paramref name="args"/>, or returns <see langword="null"/> if it isn't there.
@@ -195,6 +207,7 @@ public sealed class CredentialCommands
         {
             SetCommand => await SetAsync(store, cancellationToken).ConfigureAwait(false),
             VerifyCommand => await VerifyAsync(store, writeHeader: true, cancellationToken).ConfigureAwait(false),
+            DescribeCommand => Describe(store),
             _ => ShowInfo(store),
         };
     }
@@ -207,6 +220,7 @@ public sealed class CredentialCommands
         writer.WriteLine($"  {SetCommand,-23} Prompt for credentials, encrypt them for the current Windows account, and save them.");
         writer.WriteLine($"  {VerifyCommand,-23} Check that the saved credentials decrypt and work, without showing them.");
         writer.WriteLine($"  {InfoCommand,-23} Show where the credentials are stored, who encrypted them and when.");
+        writer.WriteLine($"  {DescribeCommand,-23} Print the credential definitions as JSON, for the Lockbox setup tool.");
         writer.WriteLine();
         writer.WriteLine("Options:");
         writer.WriteLine($"  {SecretsPathOption + " <path>",-23} Use this secrets file instead of {SecretsPath ?? $@"%APPDATA%\{AppName}\{SecretStore.DefaultFileName}"}.");
@@ -250,7 +264,8 @@ public sealed class CredentialCommands
                     return ExitFailure;
                 }
 
-                if (input.Length > 0)
+                // Whitespace-only counts as blank, even for masked values (which are otherwise kept exactly as typed).
+                if (!string.IsNullOrWhiteSpace(input))
                 {
                     values[credential.Name] = input;
                     break;
@@ -275,10 +290,12 @@ public sealed class CredentialCommands
             {
                 if (replaceFile)
                 {
-                    store.Delete();
+                    store.ReplaceSecrets(values);
                 }
-
-                store.SetSecrets(values);
+                else
+                {
+                    store.SetSecrets(values);
+                }
             }
             catch (SecretStoreException ex)
             {
@@ -301,54 +318,35 @@ public sealed class CredentialCommands
     {
         replaceFile = false;
         keepable = new HashSet<string>(StringComparer.Ordinal);
+        var status = store.Inspect(Credentials.Select(c => c.Name));
 
-        SecretFileInfo info;
-        try
+        switch (status.FileState)
         {
-            info = store.GetInfo();
-        }
-        catch (SecretStoreException ex) when (ex.Error == SecretStoreError.FileNotFound)
-        {
-            return true;
-        }
-        catch (SecretStoreException ex) when (ex.Error == SecretStoreError.CorruptFile)
-        {
-            _console.Out.WriteLine();
-            _console.Out.WriteLine(ex.Message);
-            replaceFile = Confirm("Replace the file and enter all credentials again?");
-            return replaceFile;
-        }
-        catch (SecretStoreException ex)
-        {
-            _console.Error.WriteLine(ex.Message);
-            return false;
-        }
+            case SecretFileState.Missing:
+            case SecretFileState.Usable:
+                keepable.UnionWith(status.Secrets.Where(s => s.State == SecretState.Usable).Select(s => s.Name));
+                return true;
 
-        if (info.Secrets.Count == 0)
-        {
-            return true;
-        }
+            case SecretFileState.Corrupt:
+                _console.Out.WriteLine();
+                _console.Out.WriteLine(status.Error!.Message);
+                replaceFile = Confirm("Replace the file and enter all credentials again?");
+                return replaceFile;
 
-        var current = store.CurrentAccount;
-        var otherAccount = info.EncryptedBy is { } owner && !owner.IsSameAccountAs(current);
-        var otherProtector = !string.Equals(info.Protector, store.ProtectorId, StringComparison.Ordinal);
-        if (otherAccount || otherProtector)
-        {
-            _console.Out.WriteLine();
-            _console.Out.WriteLine(otherAccount
-                ? $"This file's credentials were encrypted by {info.EncryptedBy}. You're running as {current}, so you can't add to them."
-                : $"This file's credentials were encrypted with '{info.Protector}', not '{store.ProtectorId}', so you can't add to them.");
-            replaceFile = Confirm($"Replace all {info.Secrets.Count} credential(s) in this file with new ones?");
-            return replaceFile;
-        }
+            case SecretFileState.OtherAccount:
+            case SecretFileState.OtherProtector:
+                var info = status.Info!;
+                _console.Out.WriteLine();
+                _console.Out.WriteLine(status.FileState == SecretFileState.OtherAccount
+                    ? $"This file's credentials were encrypted by {info.EncryptedBy}. You're running as {store.CurrentAccount}, so you can't add to them."
+                    : $"This file's credentials were encrypted with '{info.Protector}', not '{store.ProtectorId}', so you can't add to them.");
+                replaceFile = Confirm($"Replace all {info.Secrets.Count} credential(s) in this file with new ones?");
+                return replaceFile;
 
-        var present = Credentials.Select(c => c.Name).Where(n => info.Secrets.Any(s => s.Name == n)).ToList();
-        if (present.Count > 0)
-        {
-            keepable.UnionWith(store.CheckSecrets(present).Where(r => r.Succeeded).Select(r => r.Name));
+            default:
+                _console.Error.WriteLine(status.Error!.Message);
+                return false;
         }
-
-        return true;
     }
 
     private bool Confirm(string question)
@@ -432,6 +430,37 @@ public sealed class CredentialCommands
         }
 
         return check.Succeeded ? ExitSuccess : ExitFailure;
+    }
+
+    private int Describe(SecretStore store)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+
+        // The default encoder escapes non-ASCII characters, so the output survives any console code page.
+        using (var json = new Utf8JsonWriter(buffer))
+        {
+            json.WriteStartObject();
+            json.WriteString("format", DescribeFormat);
+            json.WriteString("appName", AppName);
+            json.WriteString("secretsPath", store.FilePath);
+            json.WriteString("serviceName", ServiceName);
+            json.WriteBoolean("hasServiceCheck", ServiceCheck is not null);
+            json.WriteStartArray("credentials");
+            foreach (var credential in Credentials)
+            {
+                json.WriteStartObject();
+                json.WriteString("name", credential.Name);
+                json.WriteString("prompt", credential.Prompt);
+                json.WriteBoolean("masked", credential.Masked);
+                json.WriteEndObject();
+            }
+
+            json.WriteEndArray();
+            json.WriteEndObject();
+        }
+
+        _console.Out.WriteLine(Encoding.UTF8.GetString(buffer.WrittenSpan));
+        return ExitSuccess;
     }
 
     private int ShowInfo(SecretStore store)

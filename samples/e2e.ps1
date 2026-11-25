@@ -68,6 +68,13 @@ foreach ($app in 'JiraExportSample', 'ApiExportSample') {
     Set-SampleUrl $app $url
 }
 
+# The setup tool must publish as a single self-contained exe too.
+$setupOut = Join-Path $work 'LockboxSetup'
+dotnet publish (Join-Path $root 'Lockbox.Setup.WinForms') -p:PublishProfile=win-x64 -o $setupOut --nologo -v quiet
+if ($LASTEXITCODE) { throw 'Publishing LockboxSetup failed.' }
+if (-not (Test-Path (Join-Path $setupOut 'LockboxSetup.exe'))) { throw 'LockboxSetup.exe was not published.' }
+Write-Host '  ok: LockboxSetup.exe publishes self-contained'
+
 # 2. Start the mocks.
 dotnet build (Join-Path $root 'samples\MockServer') -c Release --nologo -v quiet
 if ($LASTEXITCODE) { throw 'Building the mock server failed.' }
@@ -97,6 +104,14 @@ try {
 
     $r = Invoke-Sample JiraExportSample (@('show-credentials-info') + $opts)
     Assert ($r.Code -eq 0 -and $r.Output -match 'jira\.pat\s+set ') 'show-credentials-info lists the PAT' $r.Output
+
+    # What the setup tool (LockboxSetup.exe) reads to discover an app's credentials.
+    $r = Invoke-Sample JiraExportSample (@('describe-credentials') + $opts)
+    $description = $r.Output | ConvertFrom-Json
+    Assert ($r.Code -eq 0 -and $description.format -eq 'lockbox-credentials/1') 'describe-credentials prints a description' $r.Output
+    Assert ($description.appName -eq 'JiraExportSample' -and $description.secretsPath -eq $jiraSecrets) 'the description names the app and its secrets file' $r.Output
+    Assert ($description.credentials.Count -eq 1 -and $description.credentials[0].name -eq 'jira.pat' -and $description.credentials[0].masked) 'the description lists the masked PAT' $r.Output
+    Assert ($r.Output -notmatch 'demo-pat-0000') 'describe-credentials never prints the PAT' $r.Output
 
     $issues = Join-Path $work 'issues.json'
     $r = Invoke-Sample JiraExportSample (@('export', '--out', $issues, '--verbose') + $opts)

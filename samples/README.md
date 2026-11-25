@@ -30,6 +30,13 @@ dotnet run --project samples/ApiExportSample -- set-credentials         # demo /
 dotnet run --project samples/ApiExportSample -- export --delay-ms 2500
 ```
 
+Or enter the credentials in the setup tool instead of at the console:
+
+```powershell
+dotnet build samples/JiraExportSample
+dotnet run --project Lockbox.Setup.WinForms -- --app samples/JiraExportSample/bin/Debug/net10.0-windows/JiraExportSample.exe
+```
+
 To see the 401 path, start the mock with `--invalidate-every 4`. Add `--verbose` to an export to see the HTTP
 logs, with `Authorization: *` in place of the header value.
 

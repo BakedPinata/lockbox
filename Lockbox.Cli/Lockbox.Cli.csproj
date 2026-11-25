@@ -8,7 +8,7 @@
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>Lockbox.Cli</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>set-credentials, verify-credentials and show-credentials-info commands for console apps that use Lockbox.</Description>
   </PropertyGroup>
 

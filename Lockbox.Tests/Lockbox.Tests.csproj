@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Lockbox\Lockbox.csproj" />
     <ProjectReference Include="..\Lockbox.Cli\Lockbox.Cli.csproj" />
+    <ProjectReference Include="..\Lockbox.Setup\Lockbox.Setup.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -89,12 +89,12 @@ public sealed class CredentialCommandsTests : StoreTestBase
     [TestMethod]
     public async Task EmptyValuesArePromptedAgain()
     {
-        var console = new FakeConsole(Line(""), Line("   "), Line("alice"), Masked(""), Masked(Password));
+        var console = new FakeConsole(Line(""), Line("   "), Line("alice"), Masked(""), Masked("   "), Masked(Password));
 
         Assert.AreEqual(0, await Run(console, "set-credentials"));
 
         Assert.AreEqual(Password, Store().GetSecret("api.password"));
-        Assert.AreEqual(3, console.Output.Split("A value is required.").Length - 1);
+        Assert.AreEqual(4, console.Output.Split("A value is required.").Length - 1);
     }
 
     [TestMethod]

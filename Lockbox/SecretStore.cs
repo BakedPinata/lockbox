@@ -155,12 +155,7 @@ public sealed class SecretStore
     public SecretFileInfo GetInfo()
     {
         var file = Load() ?? throw FileNotFound();
-        return new SecretFileInfo(
-            FilePath,
-            SecretFile.CurrentVersion,
-            file.Protector,
-            file.EncryptedBy,
-            [.. file.Secrets.Select(kv => new SecretEntryInfo(kv.Key, kv.Value.CreatedUtc))]);
+        return ToInfo(file);
     }
 
     /// <summary>Encrypts and saves one secret, keeping the file's other secrets.</summary>
@@ -178,21 +173,7 @@ public sealed class SecretStore
     /// </exception>
     public void SetSecrets(IReadOnlyDictionary<string, string> secrets)
     {
-        ArgumentNullException.ThrowIfNull(secrets);
-        if (secrets.Count == 0)
-        {
-            throw new ArgumentException("At least one secret is required.", nameof(secrets));
-        }
-
-        foreach (var (name, value) in secrets)
-        {
-            ValidateSecretName(name);
-            if (string.IsNullOrEmpty(value))
-            {
-                throw new ArgumentException($"The value for '{name}' is empty.", nameof(secrets));
-            }
-        }
-
+        ValidateValues(secrets);
         var current = _currentAccount();
         var file = Load() ?? new SecretFile(_protector.Id);
 
@@ -205,33 +186,94 @@ public sealed class SecretStore
 
             if (file.EncryptedBy is { } owner && !owner.IsSameAccountAs(current))
             {
-                throw new SecretStoreException(
-                    SecretStoreError.EncryptedByAnotherAccount,
-                    FilePath,
-                    null,
-                    $"The secrets file '{FilePath}' was encrypted by {owner.Account} on {owner.Machine}, but you are running as " +
-                    $"{current.Account} on {current.Machine}. Its secrets can only be read by that account, so secrets from different " +
-                    "accounts can't be mixed in one file. Use a different secrets path, or delete the file first to replace all of its secrets.");
+                throw AnotherAccountsFile(owner, current);
             }
         }
 
-        var createdUtc = _timeProvider.GetUtcNow().UtcDateTime;
-        foreach (var (name, value) in secrets)
+        EncryptInto(file, secrets, current);
+        Save(file);
+    }
+
+    /// <summary>
+    /// Replaces the whole file with these secrets in one atomic write, discarding everything it held before:
+    /// another account's secrets, another protector's, or a corrupt file. Use it only once the user has agreed.
+    /// </summary>
+    /// <exception cref="SecretStoreException">The file can't be written.</exception>
+    public void ReplaceSecrets(IReadOnlyDictionary<string, string> secrets)
+    {
+        ValidateValues(secrets);
+        var file = new SecretFile(_protector.Id);
+        EncryptInto(file, secrets, _currentAccount());
+        Save(file);
+    }
+
+    /// <summary>
+    /// Describes the file and each of <paramref name="names"/> without throwing: whether the file can be added to,
+    /// must be replaced first, or can't be used, and whether each secret is present and decrypts. Intended for setup
+    /// tools that need to decide what to offer.
+    /// </summary>
+    public SecretStoreStatus Inspect(IEnumerable<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        var nameList = names.ToList();
+        nameList.ForEach(ValidateSecretName);
+
+        SecretFile? file;
+        try
         {
-            var plaintext = StrictUtf8.GetBytes(value);
+            file = Load();
+        }
+        catch (SecretStoreException ex)
+        {
+            var state = ex.Error switch
+            {
+                SecretStoreError.CorruptFile => SecretFileState.Corrupt,
+                SecretStoreError.UnsupportedVersion => SecretFileState.Unsupported,
+                _ => SecretFileState.Unreadable,
+            };
+            return new SecretStoreStatus(state, null, ex, [.. nameList.Select(n => new SecretStatus(n, SecretState.Unknown, null, null))]);
+        }
+
+        if (file is null)
+        {
+            return new SecretStoreStatus(SecretFileState.Missing, null, null, [.. nameList.Select(n => new SecretStatus(n, SecretState.Missing, null, null))]);
+        }
+
+        var current = _currentAccount();
+        var (fileState, fileError) = file.Secrets.Count == 0
+            ? (SecretFileState.Usable, null)
+            : !string.Equals(file.Protector, _protector.Id, StringComparison.Ordinal)
+                ? (SecretFileState.OtherProtector, ProtectorMismatch(file))
+                : file.EncryptedBy is { } owner && !owner.IsSameAccountAs(current)
+                    ? (SecretFileState.OtherAccount, AnotherAccountsFile(owner, current))
+                    : (SecretFileState.Usable, (SecretStoreException?)null);
+
+        var secrets = new List<SecretStatus>(nameList.Count);
+        foreach (var name in nameList)
+        {
+            if (!file.Secrets.TryGetValue(name, out var entry))
+            {
+                secrets.Add(new SecretStatus(name, SecretState.Missing, null, null));
+                continue;
+            }
+
             try
             {
-                file.Secrets[name] = new SecretEntry(createdUtc, _protector.Protect(plaintext, GetContext(name)));
+                if (fileState == SecretFileState.OtherProtector)
+                {
+                    throw fileError!;
+                }
+
+                _ = Decrypt(file, name);
+                secrets.Add(new SecretStatus(name, SecretState.Usable, entry.CreatedUtc, null));
             }
-            finally
+            catch (SecretStoreException ex)
             {
-                CryptographicOperations.ZeroMemory(plaintext);
+                secrets.Add(new SecretStatus(name, SecretState.Unreadable, entry.CreatedUtc, ex));
             }
         }
 
-        file.Protector = _protector.Id;
-        file.EncryptedBy = current;
-        Save(file);
+        return new SecretStoreStatus(fileState, ToInfo(file), fileError, secrets);
     }
 
     /// <summary>Removes a secret from the file.</summary>
@@ -294,6 +336,59 @@ public sealed class SecretStore
                 nameof(name));
         }
     }
+
+    private static void ValidateValues(IReadOnlyDictionary<string, string> secrets)
+    {
+        ArgumentNullException.ThrowIfNull(secrets);
+        if (secrets.Count == 0)
+        {
+            throw new ArgumentException("At least one secret is required.", nameof(secrets));
+        }
+
+        foreach (var (name, value) in secrets)
+        {
+            ValidateSecretName(name);
+            if (string.IsNullOrEmpty(value))
+            {
+                throw new ArgumentException($"The value for '{name}' is empty.", nameof(secrets));
+            }
+        }
+    }
+
+    private void EncryptInto(SecretFile file, IReadOnlyDictionary<string, string> secrets, AccountInfo current)
+    {
+        var createdUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        foreach (var (name, value) in secrets)
+        {
+            var plaintext = StrictUtf8.GetBytes(value);
+            try
+            {
+                file.Secrets[name] = new SecretEntry(createdUtc, _protector.Protect(plaintext, GetContext(name)));
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(plaintext);
+            }
+        }
+
+        file.Protector = _protector.Id;
+        file.EncryptedBy = current;
+    }
+
+    private SecretFileInfo ToInfo(SecretFile file) => new(
+        FilePath,
+        SecretFile.CurrentVersion,
+        file.Protector,
+        file.EncryptedBy,
+        [.. file.Secrets.Select(kv => new SecretEntryInfo(kv.Key, kv.Value.CreatedUtc))]);
+
+    private SecretStoreException AnotherAccountsFile(AccountInfo owner, AccountInfo current) => new(
+        SecretStoreError.EncryptedByAnotherAccount,
+        FilePath,
+        null,
+        $"The secrets file '{FilePath}' was encrypted by {owner.Account} on {owner.Machine}, but you are running as " +
+        $"{current.Account} on {current.Machine}. Its secrets can only be read by that account, so secrets from different " +
+        "accounts can't be mixed in one file. Use a different secrets path, or replace all of its secrets.");
 
     private string GetContext(string name) => $"{AppName}|{name}";
 

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Lockbox.Setup</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <Description>The logic behind the Lockbox setup tool, kept free of UI code so it can be tested anywhere.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Lockbox\Lockbox.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lockbox.Tests" />
+    <InternalsVisibleTo Include="Lockbox.Setup.WinForms.Tests" />
+  </ItemGroup>
+
+</Project>
