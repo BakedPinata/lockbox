@@ -22,7 +22,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$work = Join-Path ([IO.Path]::GetTempPath()) "lockbox-e2e-$([guid]::NewGuid().ToString('N'))"
+$work = Join-Path ([IO.Path]::GetTempPath()) "MSBuildTemp\lockbox-e2e-$([guid]::NewGuid().ToString('N'))"
 $url = "http://127.0.0.1:$Port"
 $rotatingUrl = "http://127.0.0.1:$($Port + 1)"
 New-Item -ItemType Directory $work | Out-Null
