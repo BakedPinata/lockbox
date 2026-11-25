@@ -74,6 +74,12 @@ public sealed class SecretStore
     /// <summary>Whether the secrets file exists.</summary>
     public bool Exists => File.Exists(FilePath);
 
+    /// <summary>The <see cref="ISecretProtector.Id"/> of the protector this store encrypts with.</summary>
+    public string ProtectorId => _protector.Id;
+
+    /// <summary>The account this process runs as, which is the account that <see cref="SetSecrets"/> encrypts for.</summary>
+    public AccountInfo CurrentAccount => _currentAccount();
+
     /// <summary>Gets the default secrets file path: <c>%APPDATA%\&lt;appName&gt;\secrets.json</c>.</summary>
     public static string GetDefaultPath(string appName)
     {

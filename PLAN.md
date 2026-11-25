@@ -49,6 +49,10 @@ Lockbox/              class library, target net10.0-windows
   DpapiUserProtector.cs       ProtectedData + CurrentUser + entropy
   SecretStore.cs              load/save named secrets to a JSON file
   SecretStoreException.cs     clear, actionable error messages
+Lockbox.Cli/              set-credentials / verify-credentials / show-credentials-info for console apps
+  CredentialCommands.cs       TryRunAsync(args), CreateStore(args), WriteUsage
+  CredentialDefinition.cs     name + prompt + masked
+  CredentialCheck.cs          optional app hook that tests the credentials against the service
 Lockbox.Tests/            MSTest; DPAPI tests are Windows-only
 Lockbox.Setup.WinForms/   GUI for entering secrets
 samples/                  demonstration apps and mock server (milestone 4)
@@ -78,11 +82,18 @@ Default path is `%APPDATA%\<AppName>\secrets.json`. It can be overridden with co
 - **Versioning:** readers ignore unknown properties but don't keep them when they save, so adding any field to the format means bumping `version`. A reader refuses (and never overwrites) a file with a newer version.
 - **One account per file:** `SetSecrets` refuses to add secrets to a file whose existing secrets were encrypted by another account (by SID, falling back to account name), because the file would end up partly unreadable. The fix is a different `--secrets-path`, or `Delete()` and then set everything again. Removing a secret leaves `encryptedBy` unchanged.
 
-### Setup commands (in each app, or in a shared CLI)
+### Setup commands (in each app, via `Lockbox.Cli`)
 
 - `set-credentials` prompts for each required secret with **masked console input**. Never accept secrets as command-line arguments, because they end up in shell history and process listings. Encrypt and save.
 - `verify-credentials` decrypts each secret and reports OK/failed **without printing values**. For the API app, it also tries a token request and reports success/failure.
 - `show-credentials-info` prints the path, the `encryptedBy` metadata, secret names and created dates. No values.
+
+Behaviour (implemented in `Lockbox.Cli`):
+
+- An app adds them with `if (await commands.TryRunAsync(args) is int exitCode) return exitCode;`. Only `--secrets-path <path>` (or `=path`) is accepted. Any other argument is rejected **without being echoed**, since it may be a secret. Exit codes: 0 success, 1 failure or cancelled, 2 usage.
+- `verify-credentials` decrypts every value, then runs the app's `CredentialCheck` hook if it has one (for example a token request) with all of them. Exceptions from the hook are reported, not thrown.
+- `set-credentials` offers "Enter to keep the current value" only for values that currently decrypt. If the file belongs to another account or protector, or is corrupt, it asks before replacing it, and only replaces it once every value has been entered. Escape or end of input cancels without saving. It runs the verify step at the end.
+- Masked input echoes `*`, supports Backspace, and ignores control keys. When stdin is redirected (provisioning scripts), values are read as plain lines, with nothing echoed.
 
 On the server, run these **as the job's Windows account on the server**, either by logging in as it or with `runas /user:SERVER\jobaccount "app.exe set-credentials"`.
 
@@ -123,7 +134,7 @@ Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in e
 
 1. [x] `Lockbox` library (`net10.0-windows`): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(DPAPI verified on Windows in CI.)*
 2. [x] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere). *(MSTest; DPAPI tests use `[OSCondition(Windows)]` and run in CI on `windows-latest` (99 passed there; the only skip is the non-Windows check). Store logic is tested on every platform with a fake account-bound protector.)*
-3. [ ] `set-credentials` / `verify-credentials` / `show-credentials-info` with masked input.
+3. [x] `set-credentials` / `verify-credentials` / `show-credentials-info` with masked input. *(`Lockbox.Cli`; masked input also checked by hand in a real terminal.)*
 4. [ ] Demonstration apps, self-contained publish, runnable without the real services:
    - **Jira-style sample:** loads `jira.pat`, sends `Authorization: Bearer <pat>`.
    - **API-style sample:** loads `api.username` / `api.password`, logs in for a JWT, keeps it in memory only, adds it with a `DelegatingHandler`, re-logs in before `exp` and on a 401 (once, then retries once).
