@@ -9,6 +9,7 @@
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>Lockbox</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.3.0</Version>
     <Description>Stores named secrets in a JSON file, encrypted with Windows DPAPI (CurrentUser scope).</Description>
   </PropertyGroup>

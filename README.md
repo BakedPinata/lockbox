@@ -236,3 +236,7 @@ pwsh samples/e2e.ps1        # Windows: publish the samples and run them end to e
 CI (GitHub Actions) builds and tests on Windows and Linux, and runs `samples/e2e.ps1` on Windows.
 
 [PLAN.md](PLAN.md) records the design decisions, the alternatives that were rejected, and why.
+
+## Licence
+
+[MIT](LICENSE).
