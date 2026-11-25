@@ -121,8 +121,8 @@ The WinForms setup utility is just a GUI over the same `SecretStore`. It has the
 
 Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in each consuming app's own solution, using the demonstration apps as the reference.
 
-1. [x] `Lockbox` library (`net10.0-windows`): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(Built and smoke-tested on Linux with a fake protector. The real DPAPI path still needs a run on Windows, covered by milestone 2.)*
-2. [x] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere). *(MSTest; DPAPI tests use `[OSCondition(Windows)]` and run in CI on `windows-latest`. Store logic is tested on every platform with a fake account-bound protector.)*
+1. [x] `Lockbox` library (`net10.0-windows`): `ISecretProtector`, `DpapiUserProtector`, `SecretStore`, JSON format, diagnostic errors. *(DPAPI verified on Windows in CI.)*
+2. [x] Unit tests: round-trip, wrong entropy fails, missing secret, corrupt file, version handling (DPAPI tests are Windows-only, so mark or skip them elsewhere). *(MSTest; DPAPI tests use `[OSCondition(Windows)]` and run in CI on `windows-latest` (99 passed there; the only skip is the non-Windows check). Store logic is tested on every platform with a fake account-bound protector.)*
 3. [ ] `set-credentials` / `verify-credentials` / `show-credentials-info` with masked input.
 4. [ ] Demonstration apps, self-contained publish, runnable without the real services:
    - **Jira-style sample:** loads `jira.pat`, sends `Authorization: Bearer <pat>`.
