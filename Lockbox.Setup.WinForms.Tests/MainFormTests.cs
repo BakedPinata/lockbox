@@ -45,7 +45,7 @@ public sealed class MainFormTests : IDisposable
         Assert.AreEqual(AccountInfo.GetCurrent().ToString(), form.AccountLabel.Text);
         Assert.IsTrue(form.SaveButton.Enabled);
         Assert.IsFalse(form.VerifyButton.Enabled, "Nothing to verify before the file exists.");
-        Assert.IsFalse(form.Warning.Visible);
+        Assert.IsFalse(form.WarningShown);
     });
 
     [STATestMethod]
@@ -107,7 +107,7 @@ public sealed class MainFormTests : IDisposable
 
         WithForm(form =>
         {
-            Assert.IsTrue(form.Warning.Visible);
+            Assert.IsTrue(form.WarningShown);
             Assert.Contains("protector 'other'", form.Warning.Text);
             form.Fields["api.username"].Input.Text = "alice";
             form.Fields["api.password"].Input.Text = "pw";
@@ -120,7 +120,7 @@ public sealed class MainFormTests : IDisposable
             _prompts.ConfirmAnswer = true;
             Pump(form.SaveAsync());
             Assert.AreEqual("pw", Store.GetSecret("api.password"));
-            Assert.IsFalse(form.Warning.Visible);
+            Assert.IsFalse(form.WarningShown);
         });
     }
 
@@ -131,7 +131,7 @@ public sealed class MainFormTests : IDisposable
 
         WithForm(form =>
         {
-            Assert.IsTrue(form.Warning.Visible);
+            Assert.IsTrue(form.WarningShown);
             Assert.Contains("couldn't describe its credentials", form.Warning.Text);
             Assert.IsFalse(form.SaveButton.Enabled);
             Assert.IsEmpty(form.Fields);

@@ -97,6 +97,9 @@ internal sealed class MainForm : Form
 
     internal Label Warning => _warning;
 
+    /// <summary>Whether the warning is meant to be shown. (<c>Control.Visible</c> is false whenever the form itself is hidden.)</summary>
+    internal bool WarningShown { get; private set; }
+
     internal TextBox Output => _output;
 
     internal Button SaveButton => _save;
@@ -294,7 +297,7 @@ internal sealed class MainForm : Form
         {
             _fieldsTable.Controls.Clear();
             _fields.Clear();
-            _warning.Visible = false;
+            HideWarning();
             UpdateButtons();
             return;
         }
@@ -335,7 +338,7 @@ internal sealed class MainForm : Form
         }
         else
         {
-            _warning.Visible = false;
+            HideWarning();
         }
 
         UpdateButtons();
@@ -344,8 +347,10 @@ internal sealed class MainForm : Form
     private void ShowWarning(string message)
     {
         _warning.Text = message;
-        _warning.Visible = true;
+        _warning.Visible = WarningShown = true;
     }
+
+    private void HideWarning() => _warning.Visible = WarningShown = false;
 
     private void UpdateButtons()
     {
