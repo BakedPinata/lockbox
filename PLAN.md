@@ -148,7 +148,7 @@ Milestones 1–4 and 8–10 are built in this repo. Milestones 5–7 happen in e
    - **API-style sample:** loads `api.username` / `api.password`, logs in for a JWT, keeps it in memory only, adds it with a `DelegatingHandler`, re-logs in before `exp` and on a 401 (once, then retries once).
    - Both expose the setup commands from milestone 3 and redact `Authorization` in logs.
    - A small local mock server (login + protected endpoint, short-lived JWTs) so the samples can be run end to end, including token expiry.
-   - *(Tested by `Samples.Tests` on every OS. `samples/e2e.ps1` runs the full flow on Windows in CI: self-contained publish, real DPAPI, credentials piped to `set-credentials`, both exports, early renewal and the 401 retry.)*
+   - *(Tested by `Samples.Tests` on every OS. `samples/e2e.ps1` runs the full flow on Windows in CI, and passes: self-contained publish, real DPAPI, credentials piped to `set-credentials`, both exports, early renewal and the 401 retry.)*
 5. [ ] *(consumer)* Integrate into a Jira app, following the Jira-style sample.
 6. [ ] *(consumer)* Integrate into an API app, following the API-style sample.
 7. [ ] *(consumer)* Remove any existing plain-text credential config from the consuming apps. Make sure secrets aren't committed in git history.
